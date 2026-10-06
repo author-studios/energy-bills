@@ -1,0 +1,332 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1d6b66">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Energy Bills">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<style>
+:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);color-scheme:light}
+body{margin:0}
+*,*::before,*::after{box-sizing:border-box}
+</style><title>Building Energy Bills</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Instrument+Sans:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: one column. Readings form on top, bills table below, saved months last. Holly's columns tinted. */
+:root{
+  --bg:#f2f4f6; --surface:#ffffff; --fg:#17212b; --muted:#5c6975; --line:#d9dfe5;
+  --accent:#1d6b66; --accent-fg:#ffffff; --holly:#e3f1ef; --warn:#8a5a00; --warn-bg:#fbf1da;
+  --font-body:"Instrument Sans",system-ui,sans-serif; --font-num:"IBM Plex Mono",ui-monospace,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#12181e; --surface:#1a222a; --fg:#e6ebef; --muted:#93a0ab; --line:#2c3741;
+  --accent:#4fb5ac; --accent-fg:#0d1417; --holly:#1b3330; --warn:#e8c06a; --warn-bg:#33290f; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#12181e; --surface:#1a222a; --fg:#e6ebef; --muted:#93a0ab; --line:#2c3741;
+  --accent:#4fb5ac; --accent-fg:#0d1417; --holly:#1b3330; --warn:#e8c06a; --warn-bg:#33290f; color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font-family:var(--font-body);font-size:15px;line-height:1.45;padding-inline:16px;padding-block:24px 48px}
+main{max-width:1000px;margin:0 auto;display:flex;flex-direction:column;gap:20px}
+h1{font-size:1.6rem;margin:0;letter-spacing:-.01em;text-wrap:balance}
+h2{font-size:.78rem;margin:0 0 12px;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);font-weight:600}
+p{margin:0}
+.sub{color:var(--muted);margin-top:4px}
+section{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:16px;min-width:0}
+.note{background:var(--warn-bg);color:var(--warn);padding:8px 12px;border-radius:4px;font-size:.9rem}
+.dates{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:16px}
+label{display:flex;flex-direction:column;gap:4px;font-size:.8rem;color:var(--muted);min-width:0}
+input{font:inherit;font-family:var(--font-num);color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:4px;padding:7px 8px;width:100%;min-width:0;box-sizing:border-box}
+input:focus-visible,button:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.meters{display:grid;gap:8px 12px;grid-template-columns:minmax(120px,1.3fr) 1fr 1fr 90px;align-items:end}
+.meters .hd{font-size:.75rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.meters .name{padding-bottom:8px;font-weight:600}
+.meters .name small{display:block;font-weight:400;color:var(--muted);font-size:.78rem}
+.used{font-family:var(--font-num);text-align:right;padding-bottom:8px;font-variant-numeric:tabular-nums}
+.used small{color:var(--muted)}
+@media(max-width:560px){
+  .meters{grid-template-columns:1fr 1fr}
+  .meters .hd{display:none}
+  .meters .name{grid-column:1/-1;padding-top:8px;padding-bottom:0}
+  .used{grid-column:1/-1;text-align:left;padding-bottom:0}
+}
+.wrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;min-width:720px;font-variant-numeric:tabular-nums}
+th,td{padding:7px 10px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
+th:first-child,td:first-child{text-align:left;color:var(--muted);position:sticky;left:0;background:var(--surface)}
+th{font-size:.75rem;font-weight:600;vertical-align:bottom;line-height:1.25}
+td{font-family:var(--font-num);font-size:.9rem}
+.h{background:var(--holly)}
+td.h:first-child{background:var(--holly)}
+tr.tot td{font-weight:600;border-top:2px solid var(--fg);border-bottom:none;color:var(--fg)}
+tr.tot td:first-child{font-family:var(--font-body)}
+.check{margin-top:12px;color:var(--muted);font-size:.9rem;font-family:var(--font-num)}
+.check b{color:var(--fg)}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+button{font:inherit;font-weight:600;border-radius:4px;padding:8px 14px;cursor:pointer;border:1px solid var(--line);background:var(--surface);color:var(--fg)}
+button.primary{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+button.small{padding:5px 9px;font-size:.8rem;font-weight:500}
+button:disabled{opacity:.45;cursor:default}
+details summary{cursor:pointer;font-weight:600}
+.rates{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-top:12px}
+.hist{width:100%;min-width:560px}
+.hist td,.hist th{font-size:.85rem}
+.status{color:var(--muted);font-size:.85rem;min-height:1.2em}
+</style>
+
+</head>
+<body>
+<main>
+  <header>
+    <h1>Building Energy Bills</h1>
+    <p class="sub">Enter the monthly meter readings. Holly, Victor and Banner Place bills are worked out from the Octopus rates.</p>
+  </header>
+
+  <p class="note" id="example" hidden>These are the September to October readings as an example. Type over them with real figures.</p>
+
+  <section aria-labelledby="h-read">
+    <h2 id="h-read">Meter readings</h2>
+    <div class="dates">
+      <label>Previous reading date<input type="date" id="d0"></label>
+      <label>This reading date<input type="date" id="d1"></label>
+      <label>Days in period<input id="days" readonly></label>
+    </div>
+    <div class="meters">
+      <span class="hd">Meter</span><span class="hd">Previous</span><span class="hd">This month</span><span class="hd" style="text-align:right">Used</span>
+
+      <span class="name">Main gas<small>Whole building, in units</small></span>
+      <label><input type="number" step="any" id="g0" aria-label="Main gas previous"></label>
+      <label><input type="number" step="any" id="g1" aria-label="Main gas this month"></label>
+      <span class="used" id="u-g"></span>
+
+      <span class="name">Main electric<small>Whole building, in kWh</small></span>
+      <label><input type="number" step="any" id="e0" aria-label="Main electric previous"></label>
+      <label><input type="number" step="any" id="e1" aria-label="Main electric this month"></label>
+      <span class="used" id="u-e"></span>
+
+      <span class="name">Victor sub gas<small>In units</small></span>
+      <label><input type="number" step="any" id="v0" aria-label="Victor gas previous"></label>
+      <label><input type="number" step="any" id="v1" aria-label="Victor gas this month"></label>
+      <span class="used" id="u-v"></span>
+
+      <span class="name">Banner Place sub electric<small>In kWh</small></span>
+      <label><input type="number" step="any" id="b0" aria-label="Banner electric previous"></label>
+      <label><input type="number" step="any" id="b1" aria-label="Banner electric this month"></label>
+      <span class="used" id="u-b"></span>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-bills">
+    <h2 id="h-bills">Bills for the period</h2>
+    <p class="status" id="msg"></p>
+    <div class="wrap" id="tablewrap"></div>
+    <p class="check" id="check"></p>
+  </section>
+
+  <section aria-labelledby="h-act">
+    <h2 id="h-act">Send and save</h2>
+    <div class="row">
+      <button id="copyV">Copy Victor's bill</button>
+      <button id="copyB">Copy Banner Place's bill</button>
+      <button id="copyH">Copy Holly's bill</button>
+      <button class="primary" id="save">Save month and start next</button>
+    </div>
+    <p class="status" id="actmsg" role="status"></p>
+  </section>
+
+  <section aria-labelledby="h-hist">
+    <h2 id="h-hist">Saved months</h2>
+    <div class="wrap" id="histwrap"></div>
+  </section>
+
+  <section>
+    <details>
+      <summary>Rates and settings</summary>
+      <div class="rates">
+        <label>Gas unit rate (p/kWh)<input type="number" step="any" id="r-gasRate"></label>
+        <label>Gas standing charge (p/day)<input type="number" step="any" id="r-gasStand"></label>
+        <label>Electric day rate (p/kWh)<input type="number" step="any" id="r-elecRate"></label>
+        <label>Electric standing charge (p/day)<input type="number" step="any" id="r-elecStand"></label>
+        <label>Climate change levy (p/kWh)<input type="number" step="any" id="r-ccl"></label>
+        <label>VAT (%)<input type="number" step="any" id="r-vat"></label>
+        <label>Gas calorific value<input type="number" step="any" id="r-cv"></label>
+        <label>Gas volume correction<input type="number" step="any" id="r-vc"></label>
+        <label>Tenant share of standing charge (%)<input type="number" step="any" id="r-split"></label>
+      </div>
+      <div class="row" style="margin-top:12px"><button class="small" id="resetRates">Reset rates to defaults</button></div>
+    </details>
+  </section>
+</main>
+
+<script>
+(function(){
+  var DEF_RATES={gasRate:5.84,gasStand:15.44,elecRate:25.15,elecStand:34.88,ccl:0.775,vat:20,cv:39.2,vc:1.022264,split:50};
+  var DEF_IN={d0:'2026-09-01',d1:'2026-10-01',g0:23271,g1:23275,e0:248313,e1:249236,v0:21589,v1:21589,b0:8059.72,b1:8424.47};
+  var IN_IDS=Object.keys(DEF_IN), RATE_IDS=Object.keys(DEF_RATES);
+  var KEY='bills.v1';
+  var store={inputs:Object.assign({},DEF_IN),rates:Object.assign({},DEF_RATES),history:[],example:true};
+  var last=null;
+
+  try{var s=JSON.parse(localStorage.getItem(KEY));if(s&&s.inputs){store=s;}}catch(e){}
+  function persist(){try{localStorage.setItem(KEY,JSON.stringify(store));}catch(e){}}
+  var $=function(id){return document.getElementById(id);};
+  function r2(x){return Math.round((x+Number.EPSILON)*100)/100;}
+  function gbp(x){return (x<0?'-':'')+'£'+Math.abs(x).toFixed(2);}
+  function num(v){return v===''||v==null?NaN:Number(v);}
+  function fmtKwh(x){return (Math.round(x*100)/100).toString();}
+
+  function daysBetween(a,b){
+    if(!a||!b)return NaN;
+    var A=Date.parse(a+'T00:00:00Z'),B=Date.parse(b+'T00:00:00Z');
+    return Math.round((B-A)/86400000);
+  }
+
+  function bill(kwh,rate,stand,days,share,R){
+    var usage=r2(kwh*rate/100);
+    var standing=r2(days*stand/100*share);
+    var ccl=r2(kwh*R.ccl/100);
+    var sub=r2(usage+standing+ccl);
+    var vat=r2(sub*R.vat/100);
+    return {kwh:kwh,usage:usage,standing:standing,ccl:ccl,sub:sub,vat:vat,total:r2(sub+vat)};
+  }
+  var FIELDS=['kwh','usage','standing','ccl','sub','vat','total'];
+  function minus(a,b){var o={};FIELDS.forEach(function(f){o[f]=r2(a[f]-b[f]);});return o;}
+  function plus(a,b){var o={};FIELDS.forEach(function(f){o[f]=r2(a[f]+b[f]);});return o;}
+  function gasKwh(units,R){return Math.round(units*R.vc*R.cv/3.6);}
+
+  function compute(){
+    var I={};IN_IDS.forEach(function(k){I[k]=$(k).value;});
+    var R={};RATE_IDS.forEach(function(k){R[k]=num($('r-'+k).value);});
+    var days=daysBetween(I.d0,I.d1);
+    $('days').value=isNaN(days)?'':days;
+    var gU=num(I.g1)-num(I.g0), eU=num(I.e1)-num(I.e0), vU=num(I.v1)-num(I.v0), bU=num(I.b1)-num(I.b0);
+    $('u-g').innerHTML=isNaN(gU)?'':fmtKwh(gU)+' <small>units</small>';
+    $('u-e').innerHTML=isNaN(eU)?'':fmtKwh(eU)+' <small>kWh</small>';
+    $('u-v').innerHTML=isNaN(vU)?'':fmtKwh(vU)+' <small>units</small>';
+    $('u-b').innerHTML=isNaN(bU)?'':fmtKwh(bU)+' <small>kWh</small>';
+    var bad=[gU,eU,vU,bU,days].some(isNaN)||RATE_IDS.some(function(k){return isNaN(R[k]);});
+    if(bad){return {error:'Fill in both dates and all eight readings to see the bills.'};}
+    if(days<=0)return {error:'The reading date for this month must be after the previous one.'};
+    var neg=[];
+    if(gU<0)neg.push('main gas');if(eU<0)neg.push('main electric');if(vU<0)neg.push('Victor gas');if(bU<0)neg.push('Banner electric');
+    if(neg.length)return {error:'This month’s reading is lower than last month’s for: '+neg.join(', ')+'.'};
+    var sh=R.split/100;
+    var gas=bill(gasKwh(gU,R),R.gasRate,R.gasStand,days,1,R);
+    var elec=bill(eU,R.elecRate,R.elecStand,days,1,R);
+    var vic=bill(gasKwh(vU,R),R.gasRate,R.gasStand,days,sh,R);
+    var ban=bill(bU,R.elecRate,R.elecStand,days,sh,R);
+    var hg=minus(gas,vic), he=minus(elec,ban), ht=plus(hg,he);
+    return {I:I,R:R,days:days,gas:gas,elec:elec,vic:vic,ban:ban,hg:hg,he:he,ht:ht};
+  }
+
+  var ROWS=[['kWh','kwh'],['Usage charge','usage'],['Standing charge','standing'],['Climate change levy','ccl'],['Subtotal','sub'],['VAT','vat'],['Total','total']];
+  var COLS=[['Main gas','gas',''],['Main electric','elec',''],['Victor gas','vic',''],['Banner Place electric','ban',''],['Holly gas','hg','h'],['Holly electric','he','h'],['Holly total','ht','h']];
+
+  function render(){
+    $('example').hidden=!store.example;
+    last=compute();
+    var wrap=$('tablewrap');
+    ['copyV','copyB','copyH','save'].forEach(function(id){$(id).disabled=!!last.error;});
+    if(last.error){
+      $('msg').textContent=last.error;wrap.innerHTML='';$('check').textContent='';return;
+    }
+    $('msg').textContent='';
+    var h='<table><thead><tr><th></th>';
+    COLS.forEach(function(c){h+='<th class="'+c[2]+'">'+c[0]+'</th>';});
+    h+='</tr></thead><tbody>';
+    ROWS.forEach(function(r){
+      h+='<tr'+(r[1]==='total'?' class="tot"':'')+'><td>'+r[0]+'</td>';
+      COLS.forEach(function(c){
+        var v=last[c[1]][r[1]];
+        h+='<td class="'+c[2]+'">'+(r[1]==='kwh'?fmtKwh(v):gbp(v))+'</td>';
+      });
+      h+='</tr>';
+    });
+    h+='</tbody></table>';
+    wrap.innerHTML=h;
+    var oct=r2(last.gas.total+last.elec.total), sum=r2(last.ht.total+last.vic.total+last.ban.total);
+    $('check').innerHTML='Octopus total for '+last.days+' days: <b>'+gbp(oct)+'</b> (gas '+gbp(last.gas.total)+' + electric '+gbp(last.elec.total)+'). Holly + Victor + Banner Place = <b>'+gbp(sum)+'</b>'+(oct===sum?'.':' — these differ by '+gbp(r2(oct-sum))+'.');
+  }
+
+  function fmtDate(d){
+    if(!d)return '';
+    var p=d.split('-');var m=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    return Number(p[2])+' '+m[Number(p[1])-1]+' '+p[0];
+  }
+  function line(a,b){return a.padEnd(22)+b;}
+  function text(who){
+    var L=last,per=fmtDate(L.I.d0)+' to '+fmtDate(L.I.d1)+' ('+L.days+' days)';
+    function one(title,b,sub){
+      return [title+' - '+per,'',
+        line('Energy used:',fmtKwh(b.kwh)+' kWh'),
+        line('Usage charge:',gbp(b.usage)),
+        line('Standing charge'+(sub?' (shared)':'')+':',gbp(b.standing)),
+        line('Climate change levy:',gbp(b.ccl)),
+        line('Subtotal:',gbp(b.sub)),
+        line('VAT ('+L.R.vat+'%):',gbp(b.vat)),
+        line('Total due:',gbp(b.total))].join('\n');
+    }
+    if(who==='V')return one('Victor gas bill',L.vic,true);
+    if(who==='B')return one('Banner Place electric bill',L.ban,true);
+    return one('Holly gas share',L.hg,false)+'\n\n'+one('Holly electric share',L.he,false)+'\n\nHolly total: '+gbp(L.ht.total);
+  }
+  function copy(t,label){
+    function done(){$('actmsg').textContent=label+' copied.';}
+    function fallback(){
+      var ta=document.createElement('textarea');ta.value=t;document.body.appendChild(ta);ta.select();
+      try{document.execCommand('copy');done();}catch(e){$('actmsg').textContent='Copy was blocked. Select the table and copy it by hand.';}
+      document.body.removeChild(ta);
+    }
+    try{navigator.clipboard.writeText(t).then(done,fallback);}catch(e){fallback();}
+  }
+
+  function renderHist(){
+    var w=$('histwrap');
+    if(!store.history.length){w.innerHTML='<p class="status">No months saved yet. Use "Save month and start next" once the bills are sent.</p>';return;}
+    var h='<table class="hist"><thead><tr><th>Period</th><th>Days</th><th>Main gas</th><th>Main electric</th><th>Victor</th><th>Banner Place</th><th>Holly</th><th></th></tr></thead><tbody>';
+    store.history.slice().reverse().forEach(function(m,i){
+      var idx=store.history.length-1-i;
+      h+='<tr><td>'+fmtDate(m.d0)+' – '+fmtDate(m.d1)+'</td><td>'+m.days+'</td><td>'+gbp(m.gas)+'</td><td>'+gbp(m.elec)+'</td><td>'+gbp(m.vic)+'</td><td>'+gbp(m.ban)+'</td><td>'+gbp(m.holly)+'</td><td><button class="small" data-del="'+idx+'">Remove</button></td></tr>';
+    });
+    w.innerHTML=h+'</tbody></table>';
+  }
+
+  // init values
+  IN_IDS.forEach(function(k){$(k).value=store.inputs[k]==null?'':store.inputs[k];});
+  RATE_IDS.forEach(function(k){$('r-'+k).value=store.rates[k];});
+  function onInput(){
+    IN_IDS.forEach(function(k){store.inputs[k]=$(k).value;});
+    RATE_IDS.forEach(function(k){store.rates[k]=$('r-'+k).value;});
+    store.example=false;persist();render();
+  }
+  IN_IDS.forEach(function(k){$(k).addEventListener('input',onInput);});
+  RATE_IDS.forEach(function(k){$('r-'+k).addEventListener('input',onInput);});
+  $('resetRates').addEventListener('click',function(){
+    RATE_IDS.forEach(function(k){$('r-'+k).value=DEF_RATES[k];});onInput();
+  });
+  $('copyV').addEventListener('click',function(){copy(text('V'),'Victor’s bill');});
+  $('copyB').addEventListener('click',function(){copy(text('B'),'Banner Place’s bill');});
+  $('copyH').addEventListener('click',function(){copy(text('H'),'Holly’s bill');});
+  $('save').addEventListener('click',function(){
+    if(!last||last.error)return;
+    store.history.push({d0:last.I.d0,d1:last.I.d1,days:last.days,gas:last.gas.total,elec:last.elec.total,vic:last.vic.total,ban:last.ban.total,holly:last.ht.total});
+    var pairs=[['g0','g1'],['e0','e1'],['v0','v1'],['b0','b1'],['d0','d1']];
+    pairs.forEach(function(p){$(p[0]).value=$(p[1]).value;$(p[1]).value='';});
+    $('actmsg').textContent='Month saved. Previous readings are now last month’s figures. Enter the next set.';
+    var keep=$('actmsg').textContent;
+    onInput();renderHist();$('actmsg').textContent=keep;
+  });
+  $('histwrap').addEventListener('click',function(e){
+    var d=e.target.getAttribute&&e.target.getAttribute('data-del');
+    if(d==null)return;
+    store.history.splice(Number(d),1);persist();renderHist();
+  });
+  render();renderHist();
+})();
+</script>
+<script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(){});});}</script>
+</body>
+</html>
